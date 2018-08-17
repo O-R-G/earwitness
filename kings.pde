@@ -2,7 +2,7 @@
  * kings
  *
  * speech to text transcription using google cloud api
- * to visually animate the typesetting of spoken language 
+ * to visually animate the typesetting of spoken language
  * and translate the cadence into visual / dynamic form
  *
  * uses processing.sound for Amplitude analysis
@@ -12,7 +12,7 @@
  * developed for Coretta Scott and Martin Luther King
  * memorial, Boston Common w/ Adam Pendleton & David Adjaye
  *
- */ 
+ */
 
 
 import processing.sound.*;
@@ -25,7 +25,7 @@ Amplitude rms;
 JSONObject json;
 PFont mono;
 
-Word[] words;           
+Word[] words;
 String[] txt;           // speech fragments as text string
 
 Boolean playing = false;
@@ -54,9 +54,12 @@ float playback_rate = 1.0;
 float amp_floor = 0.04; // 0.02 0.04 [0.08]
 float _space;
 float _leading;
+int current_page = 1;
+int _paraOffset;
 
 void setup() {
     size(450,800);         // 9 x 16
+    // size(400,400);         // 9 x 16
     // pixelDensity(displayDensity());
     // println("displayDensity : " + displayDensity());
     smooth();
@@ -64,6 +67,7 @@ void setup() {
     mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
     textFont(mono);
     _space = textWidth(" ");    // [], + 10
+    _paraOffset = int(_space)*4;
     _leading = 22;  // [24]
     box_x = 40;     // [20]
     box_y = 60;     // [40]
@@ -85,7 +89,7 @@ void draw() {
         mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
         textFont(mono);
     }
-    
+
     background(0);
     fill(255);
     noStroke();
@@ -105,26 +109,32 @@ void draw() {
 
         // typesetting
         for (Word w : words) {
-            if (w.spoken()) {
+            if (w.spoken() && (w.page == -1 || w.page == current_page)) {
                 if (w.opacity == 0.0)
                     w.opacity(rms.analyze());
-                /*
-                if (w.paragraph) {
+
+                if (_x + w.width > box_w) {
                     _x = 0;
                     _y += _leading;
                 }
-                */
+
+                if (_y + box_y + box_y > height) {
+                    _y = 0;
+                    current_page++;
+                }
+
+                if (w.term) {
+                  _x += _paraOffset;
+                }
+
                 w.display(255, _x + box_x, _y + box_y);
-                if (!(_x + w.width + 8 * _space > box_w)) {
-                    _x += (w.width + _space);
-                } else {
+                w.page = current_page;
+
+                _x += (w.width + _space);
+
+                if (w.paragraph) {
                     _x = 0;
                     _y += _leading;
-                    if (_y + box_y + box_y > height) {
-                        _y = 0;
-                        fill(0);
-                        rect(10,10,width-10, height-10);
-                    }
                 }
             }
         }
@@ -224,16 +234,17 @@ Boolean load_gc_json(String filename) {
                 float in = float(w.getString("startTime").replace("s",""));
                 float out = float(w.getString("endTime").replace("s",""));
                 String txt = w.getString("word");
-                boolean paragraph;
+                Boolean paragraph = false;
+                Boolean term = false;
                 if (w.hasKey("paragraph") == true) {
                     paragraph = w.getBoolean("paragraph");
-                    // println(paragraph);
-                } else { 
-                    paragraph = false;
+                }
+                if (w.hasKey("term") == true) {
+                    term = w.getBoolean("term");
                 }
                 // new word object to array
                 // words[k] = new Word(in, out, txt);
-                words_a[k] = new Word(in, out, txt, paragraph);
+                words_a[k] = new Word(in, out, txt, paragraph, term);
 
                 /*
                 println(words[k].in);
@@ -283,7 +294,7 @@ void stroke_text(String text, int weight, int x, int y) {
     }
 }
 
-/* 
+/*
 
     interaction
 
@@ -370,4 +381,3 @@ void keyPressed() {
             break;
     }
 }
-

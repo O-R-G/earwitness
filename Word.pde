@@ -12,14 +12,17 @@ class Word {
     float opacity;
     Boolean paragraph;
     Boolean spoken;
+    Boolean term;
+    int page = -1;
 
-    Word(float in_, float out_, String txt_, Boolean paragraph_) {
+    Word(float in_, float out_, String txt_, Boolean paragraph_, Boolean term_) {
         in = in_;
         out = out_;
         txt = txt_;
         paragraph = paragraph_;
-        if (paragraph) 
-            txt += " ...";
+        term = term_;
+        // if (paragraph)
+        //     txt += " ...";
         width = textWidth(this.txt);
         length = txt.length();
         opacity = 0.0;
@@ -50,7 +53,7 @@ class Word {
 
     void display(int fill, int _x, int _y) {
         fill(fill, int(opacity));
-        text(txt, _x, _y); 
+        text(txt, _x, _y);
         // int weight  = int(map(fill, 0.0, 255.0, 0.0, 12.0));
         // stroke_text(txt, weight, _x, _y);
     }
