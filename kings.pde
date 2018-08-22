@@ -55,7 +55,9 @@ float amp_floor = 0.04; // 0.02 0.04 [0.08]
 float _space;
 float _leading;
 int current_page = 1;
-int _paraOffset;
+Boolean inParagraph = false;
+
+float[] lastN = new float[100];
 
 void setup() {
     size(450,800);         // 9 x 16
@@ -67,7 +69,6 @@ void setup() {
     mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
     textFont(mono);
     _space = textWidth(" ");    // [], + 10
-    _paraOffset = int(_space)*4;
     _leading = 22;  // [24]
     box_x = 40;     // [20]
     box_y = 60;     // [40]
@@ -97,6 +98,8 @@ void draw() {
     int _x = 0;
     int _y = 0;
 
+    inParagraph = true;
+
     if (playing) {
 
         current_time = millis() - millis_start;
@@ -121,20 +124,21 @@ void draw() {
                 if (_y + box_y + box_y > height) {
                     _y = 0;
                     current_page++;
-                }
-
-                if (w.term) {
-                  _x += _paraOffset;
+                    if (inParagraph) {
+                      w.newPageStart();
+                    }
                 }
 
                 w.display(255, _x + box_x, _y + box_y);
                 w.page = current_page;
+                inParagraph = true;
 
                 _x += (w.width + _space);
 
                 if (w.paragraph) {
                     _x = 0;
                     _y += _leading;
+                    inParagraph = false;
                 }
             }
         }
@@ -144,15 +148,23 @@ void draw() {
             ellipse(width/2, height/2, rms_scaled, rms_scaled);
         if (wave)
             rect(counter*granularity%width, height-rms_scaled, granularity, rms_scaled);
-        /*
-        if (spectrum) {
-            fft.analyze();
-            for (int i = 0; i < bands; i++) {
-                sum_fft[i] += (fft.spectrum[i] - sum_fft[i]) * smooth_factor;
-                rect( i*r_width, height, r_width, -sum_fft[i]*height*scale );
-            }
-        }
-        */
+
+
+        // for (int i = 0; i < lastN.length; i++) {
+        //   fill(255);
+        //   rect(i, height-50, 1, (float)Math.random()*10);
+        // }
+        // if (spectrum) {
+
+        // fft.analyze();
+        // for (int i = 0; i < bands; i++) {
+        //     fill(255);
+        //     sum_fft[i] += (fft.spectrum[i] - sum_fft[i]) * smooth_factor;
+        //     rect( i*r_width, height, r_width, -sum_fft[i]*height*scale );
+        //     println(sum_fft[i]);
+        // }
+        // }
+
     }
 
     if (PDFoutput) {
@@ -176,11 +188,11 @@ Boolean play_sample() {
         millis_start = millis();
         // sample.play();   // always throws error on exit (bug)
         sample.loop();      // so use .loop() instead
-        /*
+
         // not working, likely to do w/bands and sample rate
-        fft = new FFT(this, bands);
-        fft.input(sample);
-        */
+        // fft = new FFT(this, bands);
+        // fft.input(sample);
+
         rms = new Amplitude(this);
         rms.input(sample);
         playing = true;
@@ -235,16 +247,13 @@ Boolean load_gc_json(String filename) {
                 float out = float(w.getString("endTime").replace("s",""));
                 String txt = w.getString("word");
                 Boolean paragraph = false;
-                Boolean term = false;
+
                 if (w.hasKey("paragraph") == true) {
                     paragraph = w.getBoolean("paragraph");
                 }
-                if (w.hasKey("term") == true) {
-                    term = w.getBoolean("term");
-                }
                 // new word object to array
                 // words[k] = new Word(in, out, txt);
-                words_a[k] = new Word(in, out, txt, paragraph, term);
+                words_a[k] = new Word(in, out, txt, paragraph);
 
                 /*
                 println(words[k].in);
