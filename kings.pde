@@ -19,6 +19,7 @@ import processing.sound.*;
 import processing.pdf.*;
 
 SoundFile sample;
+SoundFile sampleFFT;
 AudioDevice device;
 FFT fft;
 Amplitude rms;
@@ -31,7 +32,7 @@ String[] txt;           // speech fragments as text string
 Boolean playing = false;
 Boolean bar = true;
 Boolean circle = false;
-Boolean spectrum = false;
+Boolean spectrum = true;
 Boolean wave = false;
 Boolean speech_flag = false;
 Boolean lastwordspoken = false;
@@ -57,8 +58,6 @@ float _leading;
 int current_page = 1;
 Boolean inParagraph = false;
 
-float[] lastN = new float[100];
-
 void setup() {
     size(450,800);         // 9 x 16
     // size(400,400);         // 9 x 16
@@ -75,9 +74,10 @@ void setup() {
     box_w = width - box_x * 2;
     box_h = height - box_y * 2;
     device = new AudioDevice(this, 44100, bands);
-    r_width = width/float(bands);
+    r_width = 1;
     String[] srcs = getDataFiles(sketchPath("data"));
     sample = new SoundFile(this, srcs[0]);
+    sampleFFT = new SoundFile(this, srcs[0]);
     load_gc_json(srcs[1]);
     println("READY ...");
     println("sample.duration() : " + sample.duration() + " seconds");
@@ -148,22 +148,18 @@ void draw() {
             ellipse(width/2, height/2, rms_scaled, rms_scaled);
         if (wave)
             rect(counter*granularity%width, height-rms_scaled, granularity, rms_scaled);
-
-
-        // for (int i = 0; i < lastN.length; i++) {
-        //   fill(255);
-        //   rect(i, height-50, 1, (float)Math.random()*10);
-        // }
-        // if (spectrum) {
-
-        // fft.analyze();
-        // for (int i = 0; i < bands; i++) {
-        //     fill(255);
-        //     sum_fft[i] += (fft.spectrum[i] - sum_fft[i]) * smooth_factor;
-        //     rect( i*r_width, height, r_width, -sum_fft[i]*height*scale );
-        //     println(sum_fft[i]);
-        // }
-        // }
+        if (spectrum) {
+          fft.analyze();
+          stroke(255);
+          noFill();
+          beginShape();
+          for (int i = 0; i < bands; i++) {
+              sum_fft[i] += (fft.spectrum[i] - sum_fft[i]) * smooth_factor;
+              // rect( i*r_width, height-10, r_width, -sum_fft[i]*height);
+              vertex( i*r_width, height-40.0-sum_fft[i]*height*0.5);
+          }
+          endShape();
+        }
 
     }
 
@@ -188,13 +184,14 @@ Boolean play_sample() {
         millis_start = millis();
         // sample.play();   // always throws error on exit (bug)
         sample.loop();      // so use .loop() instead
-
-        // not working, likely to do w/bands and sample rate
-        // fft = new FFT(this, bands);
-        // fft.input(sample);
+        sampleFFT.loop();      // so use .loop() instead
 
         rms = new Amplitude(this);
         rms.input(sample);
+
+        fft = new FFT(this, bands);
+        fft.input(sampleFFT);
+
         playing = true;
         return true;
     } else {
@@ -206,6 +203,7 @@ Boolean stop_sample() {
     playing = false;
     // rms = null;
     sample.stop();
+    sampleFFT.stop();
     return true;
 }
 
