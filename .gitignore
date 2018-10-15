@@ -3,4 +3,4 @@ data/*.wav
 data/*.json
 data/archive/*.wav
 data/archive/*.json
-out/out.pdf
+out/

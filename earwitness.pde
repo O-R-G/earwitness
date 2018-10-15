@@ -14,15 +14,19 @@
  *
  */
 
+import ddf.minim.*;
+import ddf.minim.analysis.*;
+import ddf.minim.effects.*;
+import ddf.minim.signals.*;
+import ddf.minim.spi.*;
+import ddf.minim.ugens.*;
 
-import processing.sound.*;
 import processing.pdf.*;
 
-SoundFile sample;
-SoundFile sampleFFT;
-AudioDevice device;
+Minim minim;
+AudioPlayer sample;
 FFT fft;
-Amplitude rms;
+
 JSONObject json;
 PFont mono;
 
@@ -32,11 +36,18 @@ String[] txt;           // speech fragments as text string
 Boolean playing = false;
 Boolean bar = true;
 Boolean circle = false;
-Boolean spectrum = true;
+Boolean spectrum = false;
 Boolean wave = false;
+Boolean waveform = false;
 Boolean speech_flag = false;
 Boolean lastwordspoken = false;
 Boolean PDFoutput = false;
+
+String currentCharacter = "A";
+
+// int seek = 1685000;
+// int seek = 125000;
+int seek = 0;
 int millis_start = 0;
 int current_time = 0;               // position in soundfile (millisec)
 int counter = 0;
@@ -58,36 +69,47 @@ float _leading;
 int current_page = 1;
 Boolean inParagraph = false;
 
+// float vScale = 2.4;
+float vScale = 1.0;
+
 void setup() {
     size(450,800);         // 9 x 16
+    // size(1920, 1080);
     // size(400,400);         // 9 x 16
     // pixelDensity(displayDensity());
     // println("displayDensity : " + displayDensity());
     smooth();
     frameRate(60);
-    mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
+    mono = createFont("fonts/Speech-to-text-normal.ttf", 16*vScale);
+    // mono = createFont("fonts/Speech-to-text-normal.ttf", 16*1.4*vScale);
     textFont(mono);
     _space = textWidth(" ");    // [], + 10
-    _leading = 22;  // [24]
-    box_x = 40;     // [20]
-    box_y = 60;     // [40]
+    _leading = 22*vScale;  // [24]
+    // _leading = 22*1.4*vScale;  // [24]
+    box_x = (int) (40*vScale);     // [20]
+    box_y = (int) (60*vScale);     // [40]
+
     box_w = width - box_x * 2;
     box_h = height - box_y * 2;
-    device = new AudioDevice(this, 44100, bands);
     r_width = 1;
     String[] srcs = getDataFiles(sketchPath("data"));
-    sample = new SoundFile(this, srcs[0]);
-    sampleFFT = new SoundFile(this, srcs[0]);
+
+    minim = new Minim(this);
+    sample = minim.loadFile(srcs[0]);
+    fft = new FFT(sample.bufferSize(), sample.sampleRate());
+    fft.linAverages(bands);
+
     load_gc_json(srcs[1]);
     println("READY ...");
-    println("sample.duration() : " + sample.duration() + " seconds");
+    println("sample.duration() : " + sample.length() + " seconds");
 }
 
 void draw() {
 
     if (PDFoutput) {
-        beginRecord(PDF, "out/out.pdf");
-        mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
+        beginRecord(PDF, "out/out" + current_page + ".pdf");
+        // mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
+        mono = createFont("fonts/Speech-to-text-normal.ttf", 16*1.4*vScale);
         textFont(mono);
     }
 
@@ -102,19 +124,19 @@ void draw() {
 
     if (playing) {
 
-        current_time = millis() - millis_start;
-        if (playing && ((current_time) >= sample.duration() * 1000))
+        current_time = millis() - millis_start + seek;
+        if (playing && ((current_time) >= sample.length() * 1000))
             stop_sample();
 
         // analyze amplitude
-        sum_rms += (rms.analyze() - sum_rms) * smooth_factor;
+        sum_rms += (sample.mix.level() - sum_rms) * smooth_factor;
         float rms_scaled = sum_rms * (height/2) * scale;
 
         // typesetting
         for (Word w : words) {
             if (w.spoken() && (w.page == -1 || w.page == current_page)) {
                 if (w.opacity == 0.0)
-                    w.opacity(rms.analyze());
+                    w.opacity(sample.mix.level());
 
                 if (_x + w.width > box_w) {
                     _x = 0;
@@ -124,6 +146,10 @@ void draw() {
                 if (_y + box_y + box_y > height) {
                     _y = 0;
                     current_page++;
+                    if (PDFoutput) {
+                      endRecord();
+                      PDFoutput = false;
+                    }
                     if (inParagraph) {
                       w.newPageStart();
                     }
@@ -140,33 +166,60 @@ void draw() {
                     _y += _leading;
                     inParagraph = false;
                 }
+
+                if (w.term && w.spoken()) {
+                  currentCharacter = w.txt.substring(0,1);
+                }
+
+                if (_y + box_y + box_y + _leading > height) {
+                  PDFoutput = true;
+                }
             }
         }
+
+        // if (PDFoutput) {
+        //     PDFoutput = false;
+        //     endRecord();
+        // }
+
+        fill(255);
+        text(currentCharacter, width-20*vScale-textWidth(currentCharacter), height-20*vScale);
+
         if (bar)
-            rect(0, 0, rms_scaled, 10);
+            rect(0, 0, rms_scaled, 10*vScale);
         if (circle)
             ellipse(width/2, height/2, rms_scaled, rms_scaled);
         if (wave)
             rect(counter*granularity%width, height-rms_scaled, granularity, rms_scaled);
         if (spectrum) {
-          fft.analyze();
+          fft.forward(sample.mix);
           stroke(255);
           noFill();
           beginShape();
-          for (int i = 0; i < bands; i++) {
-              sum_fft[i] += (fft.spectrum[i] - sum_fft[i]) * smooth_factor;
-              // rect( i*r_width, height-10, r_width, -sum_fft[i]*height);
-              vertex( i*r_width, height-40.0-sum_fft[i]*height*0.5);
+          for (int i = 0; i < fft.avgSize(); i++) {
+              sum_fft[i] += (fft.getAvg(i) - sum_fft[i]) * smooth_factor;
+              vertex( i*r_width, height-40.0-sum_fft[i]*height*0.05);
+          }
+          endShape();
+        }
+        if (waveform) {
+          stroke(255);
+          noFill();
+          beginShape();
+          // float ySilence = height/2;
+          int numFrames = sample.mix.size(); // s = AudioPlayer
+          for(int i = 0; i < numFrames; i++) {
+            // float x = map(i, 0, numFrames -1, 0, r_width*128);
+            float x = map(i, 0, numFrames-1, width-r_width*128, width);
+            float y = map(sample.mix.get(i), 1, -1, 0, 100);
+            vertex(x, height-y);
           }
           endShape();
         }
 
     }
 
-    if (PDFoutput) {
-        PDFoutput = false;
-        endRecord();
-    }
+
     counter++;
 }
 
@@ -182,15 +235,7 @@ Boolean play_sample() {
         out = 0;
         counter = 0;
         millis_start = millis();
-        // sample.play();   // always throws error on exit (bug)
-        sample.loop();      // so use .loop() instead
-        sampleFFT.loop();      // so use .loop() instead
-
-        rms = new Amplitude(this);
-        rms.input(sample);
-
-        fft = new FFT(this, bands);
-        fft.input(sampleFFT);
+        sample.play(seek  );
 
         playing = true;
         return true;
@@ -201,9 +246,7 @@ Boolean play_sample() {
 
 Boolean stop_sample() {
     playing = false;
-    // rms = null;
-    sample.stop();
-    sampleFFT.stop();
+    sample.pause();
     return true;
 }
 
@@ -245,13 +288,22 @@ Boolean load_gc_json(String filename) {
                 float out = float(w.getString("endTime").replace("s",""));
                 String txt = w.getString("word");
                 Boolean paragraph = false;
+                Boolean term = false;
+                Boolean term_component = false;
 
                 if (w.hasKey("paragraph") == true) {
                     paragraph = w.getBoolean("paragraph");
                 }
+
+                if (w.hasKey("term") == true) {
+                    term = w.getBoolean("term");
+                }
+                if (w.hasKey("term-component") == true) {
+                    term_component = w.getBoolean("term-component");
+                }
                 // new word object to array
                 // words[k] = new Word(in, out, txt);
-                words_a[k] = new Word(in, out, txt, paragraph);
+                words_a[k] = new Word(in, out, txt, paragraph, term, term_component);
 
                 /*
                 println(words[k].in);
@@ -337,13 +389,13 @@ void keyPressed() {
         case '=':
             if (playing) {
                 playback_rate += .1;
-                sample.rate(playback_rate);
+                // sample.rate(playback_rate);
                 break;
             }
         case '-':
             if (playing) {
                 playback_rate -= .1;
-                sample.rate(playback_rate);
+                // sample.rate(playback_rate);
                 break;
             }
         case 'p':

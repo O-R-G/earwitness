@@ -3,13 +3,13 @@
 # google cloud speech to text implemented with processing front end
 # (google cloud services account free 365-day trial)
 # https://cloud.google.com/speech-to-text/docs/
-# gc project kings-speech-to-text, gc bucket kings-speech-to-text
+# gc project earwitness-speech-to-text, gc bucket earwitness-speech-to-text
 # authentication key as bash environment variable
 
-#KEY=/Users/eric/dev/kings-auth/kings-212617-06ed0601c807.json
-KEY=/Users/reinfurt/Documents/Projects/KINGS/software/google-cloud-platform/json/auth/kings-speech-to--1532733222205-b656714f6407.json
-#BUCKET=gs://kings-speech-to-text-2
-BUCKET=gs://kings-speech-to-text
+KEY=/Users/eric/dev/kings-auth/kings-212617-06ed0601c807.json
+#KEY=/Users/reinfurt/Documents/Projects/KINGS/software/google-cloud-platform/json/auth/kings-speech-to--1532733222205-b656714f6407.json
+BUCKET=gs://kings-speech-to-text-2
+#BUCKET=gs://kings-speech-to-text
 
 IN=data/speech.wav
 
@@ -20,9 +20,9 @@ while [ "$1" != "" ]; do
         -k | --key )		shift
                                 KEY=$1;;
         -h | --help )           echo -e "\
-Usage: kings [OPTION]... [FILE]...
+Usage: earwitness [OPTION]... [FILE]...
 Submit google cloud speech-to-text recognize request, returns .json. \
-Run kings.pde using returned speech.wav & txt.json. \
+Run earwitness.pde using returned speech.wav & txt.json. \
 Input audio files can be any format that ffmpeg can handle.
 
   -i, --in              input file [unused?]
@@ -115,7 +115,7 @@ NAME=$(curl -sS -H "Content-Type: application/json" \
     },
     "metadata": {
       "interactionType": "PRESENTATION",
-      "audioTopic": "Martin Luther King Jr."
+      "audioTopic": ""
     }
   },
   "audio": {
