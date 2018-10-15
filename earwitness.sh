@@ -144,6 +144,13 @@ echo 'received translation ...'
 echo $OUTPUT > $JSON
 
 #
+# pre process the json!
+#
+
+echo 'preprocess translation ...'
+python preprocess.py $JSON
+
+#
 #   4.  run .pde using data/txt.json and data/speech.wav
 #       (processing wants data/speech.wav to be 44.1k)
 #       ** unimplemented **
