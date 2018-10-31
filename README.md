@@ -37,10 +37,13 @@ transcription errors. Open up the `.json` file in the `data` folder. Each word c
    "word": "Therefore" <- The word itself
  }
 ```
-The `data/earwitness full` and `data/earwitness short` folders offer good examples of processed files. To try these out, place `.wav` and `.json` files in the `data` folder. 
+
 4. After you finish post processing, run `pjava .` in the root folder. This will open the Processing animation. 
 
 Repeat steps 3 and 4 until you get to the desired output.
+
+The `data/earwitness full` and `data/earwitness short` folders offer good examples of processed files. To try these out, place `.wav` and `.json` files in the `data` folder. 
+
 
 Processing Animation
 ---
