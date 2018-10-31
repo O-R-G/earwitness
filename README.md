@@ -42,15 +42,16 @@ transcription errors. Open up the `.json` file in the `data` folder. Each word c
 
 Repeat steps 3 and 4 until you get to the desired output.
 
-The `data/earwitness full` and `data/earwitness short` folders offer good examples of processed files. To try these out, place `.wav` and `.json` files in the `data` folder. 
-
-
 Processing Animation
 ---
 The processing sketch can be run by calling `pjava .` in the root folder. Its behavior is heavily customizable and all the code
 has been documented in quite some detail. To create a recording of the screen, use Quicktime or a similar screen recording
 software. To optimize for the screen, it's best to uncomment  `pixelDensity(displayDensity());` to get a better resolution
 output, but this will likely mess up PDF output. The sketch will automatically generate PDFs of each individual page in `out`.
+
+Examples
+---
+You can find examples of processed audio and cleaned up json [here](http://o-r-g.com/out/earwitness-examples.zip). These `.wav` and `.json` files can be placed in the `data` folder.
 
 Contact
 ---
