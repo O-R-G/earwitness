@@ -5,6 +5,20 @@
 # https://cloud.google.com/speech-to-text/docs/
 # gc project earwitness-speech-to-text, gc bucket earwitness-speech-to-text
 # authentication key as bash environment variable
+#
+# To get started make sure that ffmpeg is installed, and then follow this tutorial
+# to set up a google speech-to-text environment:
+# https://cloud.google.com/speech-to-text/docs/quickstart-protocol
+#
+# Replace this line with the link to your downloaded json auth credentials
+# KEY=[YOUR KEY JSON HERE]
+
+# Also in the same GCP project, set up a Cloud Storage bucket. Replace this line
+# BUCKET=gs://[YOUR BUCKET HERE]
+#
+# Usage
+# ./earwitness.sh -i path-to-file.mp3
+#
 
 KEY=/Users/eric/dev/kings-auth/kings-212617-06ed0601c807.json
 #KEY=/Users/reinfurt/Documents/Projects/KINGS/software/google-cloud-platform/json/auth/kings-speech-to--1532733222205-b656714f6407.json
@@ -37,6 +51,7 @@ filename=$(basename -- "$IN")
 extension="${filename##*.}"
 filename="${filename%.*}"
 
+# output files
 OUT=data/$filename.wav
 JSON=data/$filename.json
 
@@ -70,10 +85,8 @@ ffmpeg -i $IN -acodec pcm_s16le -ac 1 -ar 44100 $OUT
 # ffmpeg -i $IN -acodec pcm_s16le -ac 1 -ar 44100 $OUT
 # ffmpeg -i $OUT -ar 16000 $TMP
 
-# rm $TMP
-
 #
-#   2.  upload audio to gc bucket (> 1:00) or local (< 1:00)
+#   2.  upload audio to gc bucket
 #
 #   include commandline flag for long-running
 
@@ -83,7 +96,6 @@ rm $TMP
 
 #
 #   3.  gcloud speech recognize, return data/txt.json
-#       ** need to add case for recognize-long-running w/flag **
 #
 
 echo "gcloud recognize ..."
@@ -99,6 +111,7 @@ num=$2
 awk -F"[,:}]" '{for(i=1;i<=NF;i++){if($i~/'$KEY'\042/){print $(i+1)}}}' | tr -d '"' | sed -n ${num}p
 }
 
+# submit job
 # https://cloud.google.com/speech-to-text/docs/reference/rest/v1p1beta1/RecognitionConfig
 NAME=$(curl -sS -H "Content-Type: application/json" \
     -H "Authorization: Bearer "$(gcloud auth print-access-token) \
@@ -127,6 +140,7 @@ NAME=$(echo $NAME)
 
 echo "submit job with id "$NAME" ..."
 
+# keep polling every 2 seconds to see if job done
 RESPONSE=""
 OUTPUT=""
 RESPONSELENGTH="$(echo $RESPONSE | wc -w | tr -d ' ')"
@@ -140,6 +154,8 @@ do
   echo "wait ..."
   sleep 2
 done
+
+# get the output
 echo 'received translation ...'
 echo $OUTPUT > $JSON
 

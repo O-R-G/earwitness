@@ -1,16 +1,19 @@
 /**
- * kings
+ * Earwitness
  *
  * speech to text transcription using google cloud api
  * to visually animate the typesetting of spoken language
  * and translate the cadence into visual / dynamic form
  *
- * uses processing.sound for Amplitude analysis
+ * uses Minim sound processing library for audio analysis
  * and processing.pdf for output
  * uses Speech-to-text-normal as base
  *
- * developed for Coretta Scott and Martin Luther King
- * memorial, Boston Common w/ Adam Pendleton & David Adjaye
+ * typesets terms and definitions in alphabetical order, keeping track
+ * of the current character, as well as displaying various visual cues.
+ *
+ * press space to begin playback. will also output pdfs of each page to the 'out'
+ * folder. takes as input a .json and its corresponding .wav file in the 'data' folder.
  *
  */
 
@@ -23,65 +26,67 @@ import ddf.minim.ugens.*;
 
 import processing.pdf.*;
 
-Minim minim;
-AudioPlayer sample;
-FFT fft;
+Minim minim;                      // Minim audio processing class
+AudioPlayer sample;               // Audio player for playing the recording
+FFT fft;                          // Class for FFT audio analysis
 
-JSONObject json;
-PFont mono;
+JSONObject json;                 // Reads in processed JSON from google cloud output
+PFont mono;                      // Speech to text typeface
 
-Word[] words;
-String[] txt;           // speech fragments as text string
+Word[] words;                    // Array of Word objects which comprise the recording
 
-Boolean playing = false;
-Boolean bar = true;
-Boolean circle = false;
-Boolean spectrum = false;
-Boolean wave = false;
-Boolean waveform = false;
-Boolean speech_flag = false;
-Boolean lastwordspoken = false;
-Boolean PDFoutput = false;
+Boolean playing = false;         // If the recording is playing
+Boolean bar = true;              // Display top bar showing amplitude
+Boolean circle = false;          // Display center circle showing amplitude
+Boolean spectrum = false;        // Display FFT spectrum analysis in bottom left
+Boolean wave = false;            // Display a moving wave that shows amplitude in bottom
+Boolean waveform = false;        // Displays waveform analysis in bottom left
 
-String currentCharacter = "A";
+Boolean PDFoutput = false;       // Should output PDF?
+Boolean lastOutput = false;      // Flag for last page
 
 // int seek = 1685000;
 // int seek = 125000;
-int seek = 0;
-int millis_start = 0;
-int current_time = 0;               // position in soundfile (millisec)
-int counter = 0;
-int bands = 128;                    // FFT bands (multiple of sampling rate)
-int granularity = 3;
-int in = 0;
-int out = 0;
-int silence_min = 30;               // [10]
-int box_x, box_y, box_w, box_h;     // text box origin
-float scale = 5.0;
-float r_width;
-float sum_rms;
+int seek = 0;                    // Starting time -- set to 0
+int millis_start = 0;            // The absolute time (from unix time) when start playing
+int current_time = 0;            // position of playhead in soundfile (millisec)
+float playback_rate = 1.0;       // Speed of playback
+
+int counter = 0;                 // Number of frames
+
+int bands = 128;                 // FFT bands (multiple of sampling rate)
 float[] sum_fft = new float[bands];   // smoothing vector
 float smooth_factor = 0.175;          // smoothing factor
-float playback_rate = 1.0;
-float amp_floor = 0.04; // 0.02 0.04 [0.08]
-float _space;
-float _leading;
-int current_page = 1;
-Boolean inParagraph = false;
+float r_width;                   // Width of rectangel
+float sum_rms;                   // RMS Helper var
+float scale = 5.0;               // Scale of waveform analysis
 
-// float vScale = 2.4;
-float vScale = 1.0;
+int granularity = 3;             // Granularity of waveform
 
+int box_x, box_y, box_w, box_h;  // text box origin
+
+float _space;                    // Width of a space
+float _leading;                  // Leading
+int current_page = 1;            // Current page
+Boolean inParagraph = false;     // If currently typesetting in a paragraph
+String currentCharacter = "A";   // The current character
+
+float vScale = 1.0;              // Scale the type
+
+// Initialize variables and load in data from data/..
 void setup() {
     size(450,800);         // 9 x 16
     // size(1920, 1080);
     // size(400,400);         // 9 x 16
+
+    // Uncomment for video recording, but keep commented for pdf output
     // pixelDensity(displayDensity());
-    // println("displayDensity : " + displayDensity());
+
     smooth();
     frameRate(60);
     mono = createFont("fonts/Speech-to-text-normal.ttf", 16*vScale);
     // mono = createFont("fonts/Speech-to-text-normal.ttf", 16*1.4*vScale);
+
     textFont(mono);
     _space = textWidth(" ");    // [], + 10
     _leading = 22*vScale;  // [24]
@@ -104,12 +109,20 @@ void setup() {
     println("sample.duration() : " + sample.length() + " seconds");
 }
 
+// Drawing loop
 void draw() {
 
+    // Output last page
+    if (words[words.length-1].spoken() && !lastOutput) {
+      PDFoutput = true;
+      lastOutput = true;
+    }
+
+    // begin output current page to pdf
     if (PDFoutput) {
         beginRecord(PDF, "out/out" + current_page + ".pdf");
-        // mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
-        mono = createFont("fonts/Speech-to-text-normal.ttf", 16*1.4*vScale);
+        mono = createFont("fonts/Speech-to-text-normal.ttf", 16);
+        // mono = createFont("fonts/Speech-to-text-normal.ttf", 16*1.4*vScale);
         textFont(mono);
     }
 
@@ -125,8 +138,11 @@ void draw() {
     if (playing) {
 
         current_time = millis() - millis_start + seek;
-        if (playing && ((current_time) >= sample.length() * 1000))
+
+        // at end, stop playing
+        if (playing && ((current_time) >= sample.length() * 1000)) {
             stop_sample();
+        }
 
         // analyze amplitude
         sum_rms += (sample.mix.level() - sum_rms) * smooth_factor;
@@ -134,18 +150,24 @@ void draw() {
 
         // typesetting
         for (Word w : words) {
+
+            // only typeset current page and check beyond..
             if (w.spoken() && (w.page == -1 || w.page == current_page)) {
                 if (w.opacity == 0.0)
                     w.opacity(sample.mix.level());
 
+                // new line
                 if (_x + w.width > box_w) {
                     _x = 0;
                     _y += _leading;
                 }
 
+                // new page
                 if (_y + box_y + box_y > height) {
                     _y = 0;
                     current_page++;
+
+                    // finish writing new page
                     if (PDFoutput) {
                       endRecord();
                       PDFoutput = false;
@@ -155,12 +177,14 @@ void draw() {
                     }
                 }
 
+                // display word
                 w.display(255, _x + box_x, _y + box_y);
                 w.page = current_page;
                 inParagraph = true;
 
                 _x += (w.width + _space);
 
+                // paragraph break
                 if (w.paragraph) {
                     _x = 0;
                     _y += _leading;
@@ -171,20 +195,23 @@ void draw() {
                   currentCharacter = w.txt.substring(0,1);
                 }
 
+                // end of page
                 if (_y + box_y + box_y + _leading > height) {
                   PDFoutput = true;
                 }
             }
         }
 
-        // if (PDFoutput) {
-        //     PDFoutput = false;
-        //     endRecord();
-        // }
+        if (words[words.length-1].spoken() && PDFoutput) {
+            endRecord();
+            PDFoutput = false;
+        }
 
+        // current character
         fill(255);
         text(currentCharacter, width-20*vScale-textWidth(currentCharacter), height-20*vScale);
 
+        // output various visualization
         if (bar)
             rect(0, 0, rms_scaled, 10*vScale);
         if (circle)
@@ -206,10 +233,8 @@ void draw() {
           stroke(255);
           noFill();
           beginShape();
-          // float ySilence = height/2;
-          int numFrames = sample.mix.size(); // s = AudioPlayer
+          int numFrames = sample.mix.size();
           for(int i = 0; i < numFrames; i++) {
-            // float x = map(i, 0, numFrames -1, 0, r_width*128);
             float x = map(i, 0, numFrames-1, width-r_width*128, width);
             float y = map(sample.mix.get(i), 1, -1, 0, 100);
             vertex(x, height-y);
@@ -218,7 +243,6 @@ void draw() {
         }
 
     }
-
 
     counter++;
 }
@@ -231,11 +255,9 @@ void draw() {
 
 Boolean play_sample() {
     if (!playing) {
-        in = 0;
-        out = 0;
         counter = 0;
         millis_start = millis();
-        sample.play(seek  );
+        sample.play(seek);
 
         playing = true;
         return true;
@@ -340,19 +362,6 @@ String[] getDataFiles(String dir) {
   return null;
 }
 
-void stroke_text(String text, int weight, int x, int y) {
-
-    // see https://forum.processing.org/two/discussion/16700/how-to-outline-text
-
-    // int value = 255 - (weight * 50);
-    // fill(value);
-    // for (int i = -1; i < 2; i++) {
-    for (int i = -weight; i <= weight; i++) {
-        text(text, x+i, y);
-        text(text, x, y+i);
-    }
-}
-
 /*
 
     interaction
@@ -386,55 +395,9 @@ void keyPressed() {
         case '.':
             stop_sample();
             break;
-        case '=':
-            if (playing) {
-                playback_rate += .1;
-                // sample.rate(playback_rate);
-                break;
-            }
-        case '-':
-            if (playing) {
-                playback_rate -= .1;
-                // sample.rate(playback_rate);
-                break;
-            }
-        case 'p':
-            PDFoutput = !PDFoutput;
-            println("** writing PDF to out/out.pdf **");
-            break;
         case 'x':
             println("** exit **");
             exit();
-            break;
-        default:
-            break;
-    }
-    switch(keyCode) {
-        case UP:
-            if (amp_floor < .99)
-                amp_floor+=.01;
-            background(204);
-            rect(0,height - (amp_floor * height),width,1);
-            println(amp_floor);
-            break;
-        case DOWN:
-            if (amp_floor > .01)
-                amp_floor-=.01;
-            background(204);
-            rect(0,height - (amp_floor * height),width,1);
-            println(amp_floor);
-            break;
-        case LEFT:
-            // current_time-=1000;
-            break;
-        case RIGHT:
-            /*
-            background(255);
-            current_time+=1000;
-            sample.stop();
-            sample.cue(current_time);
-            sample.play();
-            */
             break;
         default:
             break;
